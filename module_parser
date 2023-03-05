@@ -18,154 +18,252 @@
 # *******************************************************************************/
 
 # /*************************************************
-#     -- File name: module_parser
-#     -- Title    : module_parser
+#     -- File name: module_parser2.py
+#     -- Title    : MODULE PARSER
 #     -- Author   : Dino
-#     -- Created  : 02/22/2023
+#     -- Created  : 02/27/2023
 #     -- Revision :
 # **************************************************/
 import os
-import sys
+import shutil
+import argparse
+from collections import defaultdict
 
-name = sys.argv[-1].split(".")[0]
+parser = argparse.ArgumentParser(description= "module parser's function")
 
+parser.add_argument('name', type=str, help = 'module name')
+parser.add_argument('-t', dest = "tree", action = 'store_true', default = False, help = 'submodule tree output')
+parser.add_argument('-st', dest = "sort_tree", action = 'store_true', default = False, help = 'submodule sorted_tree output')
+parser.add_argument('-c', dest = "copy", action = 'store_true', default = False, help = 'copy submodule')
+
+args = parser.parse_args()
 
 def find_ifdef(list: list, define_list: list, )-> int :
-    if '`ifdef' in list :
-        return list[list.index('`ifdef') + 1] in define_list
-    elif '`ifndef' in list :
-        return list[list.index('`ifndef') + 1] not in define_list
-    else :
-        return False
+   if '`ifdef' in list :
+      return list[list.index('`ifdef') + 1] in define_list
+   elif '`ifndef' in list :
+      return list[list.index('`ifndef') + 1] not in define_list
+   else :
+      return False
 
 def find_ifelse(con: list, check: list, body: list, define: list, module: list, file: list) :
-    if len(con) == len(check) :
-        if con[-1]  == check[-1]:
-            if '`ifdef' in body or '`ifndef' in body:
-                if find_ifdef(body, define) :
-                    con.append('if')
-                else : 
-                    con.append('else')
-                check.append('if')
-            elif '`else' in body :
-                check.pop()
-                check.append('else')
-            elif '`endif' in body :
-                con.pop()
-                check.pop()
-            else :
-                for index in range(len(body)) :
-                    if '//' == body[index]:
-                        break
-                    if body[index] in file : module.append(body[index])
-                    if body[index] == '`define' : define.append(body[index + 1])
-        else :
-            if '`ifdef' in body or '`ifndef' in body:
-                check.append('if')
-            elif '`else' in body :
-                check.pop()
-                check.append('else')
-            elif '`endif' in body :
-                con.pop()
-                check.pop()
+   if len(con) == len(check) :
+      if con[-1]  == check[-1]:
+         if '`ifdef' in body or '`ifndef' in body:
+            if find_ifdef(body, define) :
+               con.append('if')
             else : 
-                return con, check, define, module, file
-    else :
-        if '`ifdef' in body or '`ifndef' in body:
+               con.append('else')
             check.append('if')
-        elif '`else' in body :
+         elif '`else' in body :
             check.pop()
             check.append('else')
-        elif '`endif' in body :
+         elif '`endif' in body :
+            con.pop()
             check.pop()
-        else : 
-            return con, check, define, module, file
-    return con, check, define, module, file
-
+         else :
+            for index in range(len(body)) :
+               if '//' == body[index]:
+                  break
+               if body[index] in file : 
+                  if index == 0 :
+                     if body[index] != name:
+                        module.append(body[index])
+               if body[index] == '`define' : define.append(body[index + 1])
+      else :
+         if '`ifdef' in body or '`ifndef' in body:
+            check.append('if')
+         elif '`else' in body :
+            check.pop()
+            check.append('else')
+         elif '`endif' in body :
+            con.pop()
+            check.pop()
+         else : 
+            return con, check, define, module
+   else :
+      if '`ifdef' in body or '`ifndef' in body:
+         check.append('if')
+      elif '`else' in body :
+         check.pop()
+         check.append('else')
+      elif '`endif' in body :
+         check.pop()
+      else : 
+         return con, check, define, module
+   return con, check, define, module
 
 def find_module(name: str, file_name: list) -> list :
-    
-    body = []
-    module_name = []
 
-    con_stack= []
-    check_stack = []
-    define = []
-    f = open(name + '.v', "r")
+   body = []
+   module_name = []
 
-    for line in f :
-        body = line.split()
-#       define.v에서 선언된 변수들을 리스트화
-        if '`include' in body and '"define.v"' in body :
-            define_result = []
-            f = open("define.v", "r")
-            lines = f.readlines()
-            for line in lines :
-                define_result = line.split()
-                if len(define_result) > 1:
-                    if define_result[0] == '`define' :
-                        if '(' in define_result[1]:
-                            a,b = define_result[1].split('(')
-                            define.append(a)
-                        else : define.append(define_result[1])
-            f.close()
-#       프로젝트 내에 변수로 선언 된 이름이 폴더내에 다른 프로젝트 이름으로 존재할 경우 제외
-        if "wire" in body or "reg" in body or "=" in body or "module" in body:
-            continue
+   con_stack= []
+   check_stack = []
+   define = []
+   pass_check = 0
 
-        if not con_stack :
-            if '`ifdef' in body or '`ifndef' in body:
-                if find_ifdef(body, define):
-                    con_stack.append('if')
-                else : 
-                    con_stack.append('else')
-                check_stack.append('if')
-            else :
-                for index in range(len(body)) :
-                    if '//' == body[index]:
-                        break
-                    if body[index] in file_name : module_name.append(body[index])
-                    if body[index] == '`define' : define.append(body[index + 1])
-                        
-        else : 
-            if con_stack[-1] == 'if' :
-                con_stack, check_stack, define, module_name, file_name = find_ifelse(con_stack, check_stack, body, define, module_name, file_name)
-            else :
-                con_stack, check_stack, define, module_name, file_name = find_ifelse(con_stack, check_stack, body, define, module_name, file_name)
-    f.close()
+   f = open(name + '.v', "r")
+   
+   for line in f :
+      if '/*' in line :
+         pass_check = 1
+      if '*/'in line :
+         pass_check = 0
 
-    return module_name
+      if pass_check == 1 : 
+         continue
 
+      body = line.split()
 
+      if '`include' in body and '"define.v"' in body :
+         define_result = []
+         f = open("define.v", "r")
+         lines = f.readlines()
+         for line in lines :
+               define_result = line.split()
+               if len(define_result) > 1:
+                  if define_result[0] == '`define' :
+                     if '(' in define_result[1]:
+                        a = define_result[1].split('(')
+                        define.append(a)
+                     else : define.append(define_result[1])
+         f.close()
+
+      if "wire" in body or "reg" in body or "=" in body or "module" in body:
+         continue
+
+      if not con_stack :
+         if '`ifdef' in body or '`ifndef' in body:
+            if find_ifdef(body, define):
+               con_stack.append('if')
+            else : 
+               con_stack.append('else')
+            check_stack.append('if')
+         else :
+            for index in range(len(body)) :
+               if '//' == body[index]:
+                  break
+               if body[index] in file_name : 
+                  if index == 0 :
+                     if body[index] != name:
+                        module_name.append(body[index])
+               if body[index] == '`define' : define.append(body[index + 1])                  
+      else : 
+         if con_stack[-1] == 'if' :
+            con_stack, check_stack, define, module_name = find_ifelse(con_stack, check_stack, body, define, module_name, file_name)
+         else :
+            con_stack, check_stack, define, module_name = find_ifelse(con_stack, check_stack, body, define, module_name, file_name)
+   f.close()
+
+   check_list = []
+   cnt_list = []
+   sum_list = []
+   for num in module_name :
+      if num not in check_list :
+         check_list.append(num)
+         cnt_list.append(1)
+      else :
+         cnt_list[check_list.index(num)] += 1
+
+   for i in range(len(check_list)) :
+      sum_list.append([check_list[i],cnt_list[i]])
+
+   if args.sort_tree :
+      return sorted(sum_list)
+      
+   return sum_list
+
+def make_tree_used_dic(module_name: list, file_name : list, cnt_check : list) -> int:
+   global n
+   global depth_check
+   global module_dic
+   
+   n += 1
+   k = 0
+
+   for i in module_name:
+      if i not in module_dic.keys() :
+         module_dic[i] = find_module(i, file_name)
+
+      submodules = []
+      cnt_list = []
+
+      for j,dupli in module_dic[i] :
+         submodules.append(j)
+         cnt_list.append(dupli)
+      if args.tree or args.sort_tree:
+         if k == len(module_name) - 1 :
+            print_module(depth_check,i,'\u2514',cnt_check[module_name.index(i)])
+            depth_check.append(0)
+         else :
+            print_module(depth_check,i,'\u251c',cnt_check[module_name.index(i)])
+            depth_check.append(1)
+         k += 1
+
+      make_tree_used_dic(submodules, file_name, cnt_list)
+      if args.tree or args.sort_tree: 
+         depth_check.pop()
+   n -= 1
+
+def print_module(depth : list, name : str, sp_str : str, cnt : int) :
+   space = ''
+   for i in depth :
+      if i : space += '\u2502   '
+      else : space += '   '
+   print("\033[1;35m" + space + sp_str + "\u2500" + '\033[1;37m' + name + '.v', '\033[0m', '[{}]'.format(cnt))
+
+def copy_module_to_dir(dir_path : str, file_list: list) -> None :
+   copy_path = './' + dir_path
+   if os.path.exists(dir_path) :
+      rmk = input(copy_path + " is exists \nremake dir? (y/n)")
+      if rmk == 'y' :
+         shutil.rmtree(copy_path)
+         os.mkdir(copy_path)
+      else : 
+         pass
+   else :
+      os.mkdir(copy_path)
+
+   dir_file = os.listdir(copy_path)
+
+   for i in file_list :
+      if i in dir_file:
+         pass
+      else :
+         shutil.copy(i + '.v',copy_path)
+   print("Copy Complete!!")
 
 if __name__ == '__main__' :
-#   프로젝트의 이름이 입력받았는지 확인
-    if name != 'module_parser':
-        module = name
-    else :
-        print("Not entered project name")
-        sys.exit()
+   n = -1
+   module_dic = defaultdict(list)
+   depth_check = [0]
 
-#   폴더 내 .v 파일 리스트화
-    file_list = os.listdir("./")
-    file_name = []
-    for file in file_list :
-        if file[-2:] == ".v" : file_name.append(file[:-2])
-#   입력받은 프로젝트 이름이 폴더 내에 있는지 확인
-    module_name = []
-    if module not in file_name :
-        print('"{0}.v" is not exist'.format(module))
-        sys.exit()
-    else :
-        module_name.append(module)
+   name = args.name.split(".")[0]
 
-#   입력받은 프로젝트에 선언되어 있는 모든 하위 모듈 호출
-    i = 0
+   file_list = os.listdir("./")
+   file_name = []
+   for file in file_list :
+      if file[-2:] == ".v" : file_name.append(file[:-2])
 
-    while i < len(module_name) :
-        for check in find_module(module_name[i], file_name):
-            if check not in module_name : module_name.append(check)
-        i += 1
+   if name not in file_name :
+      print('"{}.v" is not exist'.format(name))
+      exit()
+   else :
+      module_name = [name]
+   if args.tree or args.sort_tree:
+      print('\033[0;31m', '='*100, '\033[0m')
+      print('\033[0;33m', '[Tree Visualization]', '\033[0m')
+   # make_tree_used_dic(a, file_name, b)
+   make_tree_used_dic(module_name, file_name, [1])
+   print('\033[0;31m', '='*100, '\033[0;37m')
 
-    for index in range(len(module_name)) :
-        print('{0}.v'.format(module_name[index]))
+   print('\033[0;33m', '[Submodule List]', '\033[0m')
+   for m in sorted(module_dic.keys()) :
+      print('\033[1;37m', '{}.v'.format(m), '\033[0m')
+   print('\033[0;31m', '='*100, '\033[0m')
+
+   if args.copy :
+      dir_path = input('Input Directory Path || ex : testdir/ \nDirectory Path : ')
+      copy_module_to_dir(dir_path, module_dic.keys())
+      print('\033[0;31m', '='*100)
