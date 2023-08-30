@@ -93,6 +93,46 @@ def find_ifelse(con: list, check: list, body: list, define: list, module: list, 
          return con, check, define, module
    return con, check, define, module
 
+def filter_line(pass_check: int, line: str) ->  list:
+
+   if len(line) < 2:
+      if pass_check == 1:
+         return [[], 1]
+      else:
+         return [[line], 0]
+   
+   chr_list = list(line)
+
+   valid = []
+   for index in range(len(chr_list)-1):
+      a, b = chr_list[index], chr_list[index+1]
+      if pass_check:
+         if a+b == '*/':
+            pass_check = 0
+            chr_list[index], chr_list[index+1] = " ", " "
+         elif a+b == "/*":
+            pass
+         elif a+b == '//':
+            chr_list[index], chr_list[index+1] = " ", " "
+         else :
+            chr_list[index]= " "
+      else:
+         if a+b == '//':
+            valid = "".join(chr_list[:index])
+            return [valid.split(), 0]
+         elif a+b == "/*":
+            pass_check = 1
+            chr_list[index], chr_list[index+1] = " ", " "
+         elif a+b == '*/':
+            print("error! {}".format(line))
+         else :
+            pass
+
+   valid = "".join(chr_list)
+   return [valid.split(), pass_check]
+
+
+
 def find_module(name: str, file_name: list) -> list :
 
    body = []
@@ -106,15 +146,14 @@ def find_module(name: str, file_name: list) -> list :
    f = open(name + '.v', "r")
    
    for line in f :
-      if '/*' in line :
-         pass_check = 1
-      if '*/'in line :
-         pass_check = 0
 
-      if pass_check == 1 : 
-         continue
+      # if pass_check == 1 : 
+      #    if '*/' in line:
+      #       pass
+      #    else :
+      #       continue
 
-      body = line.split()
+      body, pass_check = filter_line(pass_check, line)
 
       if '`include' in body and '"define.v"' in body :
          define_result = []
@@ -142,8 +181,6 @@ def find_module(name: str, file_name: list) -> list :
             check_stack.append('if')
          else :
             for index in range(len(body)) :
-               if '//' == body[index]:
-                  break
                if body[index] in file_name : 
                   if index == 0 :
                      if body[index] != name:
@@ -214,7 +251,8 @@ def print_module(depth : list, name : str, sp_str : str, cnt : int) :
    print("\033[1;35m" + space + sp_str + "\u2500" + '\033[1;37m' + name + '.v', '\033[0m', '[{}]'.format(cnt))
 
 def copy_module_to_dir(dir_path : str, file_list: list) -> None :
-   copy_path = './' + dir_path
+   # copy_path = './' + dir_path
+   copy_path = dir_path
    if os.path.exists(dir_path) :
       rmk = input(copy_path + " is exists \nremake dir? (y/n)")
       if rmk == 'y' :
@@ -245,7 +283,7 @@ if __name__ == '__main__' :
    file_name = []
    for file in file_list :
       if file[-2:] == ".v" : file_name.append(file[:-2])
-
+   
    if name not in file_name :
       print('"{}.v" is not exist'.format(name))
       exit()
@@ -255,7 +293,7 @@ if __name__ == '__main__' :
       print('\033[0;31m', '='*100, '\033[0m')
       print('\033[0;33m', '[Tree Visualization]', '\033[0m')
    # make_tree_used_dic(a, file_name, b)
-   make_tree_used_dic(module_name, file_name, [1])
+   make_tree_used_dic(module_name, file_name, cnt_check= [1])
    print('\033[0;31m', '='*100, '\033[0;37m')
 
    print('\033[0;33m', '[Submodule List]', '\033[0m')
@@ -266,4 +304,4 @@ if __name__ == '__main__' :
    if args.copy :
       dir_path = input('Input Directory Path || ex : testdir/ \nDirectory Path : ')
       copy_module_to_dir(dir_path, module_dic.keys())
-      print('\033[0;31m', '='*100)
+      print('\033[0;31m', '='*100,'\033[0m')
